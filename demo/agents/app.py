@@ -7,19 +7,6 @@ from config_utils import save_builder_configuration
 from gradio_utils import ChatBot
 
 
-def format_cover_html(configuration):
-    print('configuration:', configuration)
-    return f"""
-<div class="bot_cover">
-    <div class="bot_avatar">
-        <img src="//img.alicdn.com/imgextra/i3/O1CN01YPqZFO1YNZerQfSBk_!!6000000003047-0-tps-225-225.jpg" />
-    </div>
-    <div class="bot_name">{configuration["name"]}</div>
-    <div class="bot_desp">{configuration["description"]}</div>
-</div>
-"""
-
-
 def update_preview(messages, preview_chat_input, name, description,
                    instructions, conversation_starters, knowledge_files,
                    capabilities_checkboxes):
@@ -53,7 +40,6 @@ def init_user(state):
         print(f'Error:{e}, with detail: {error}')
     state['user_agent'] = user_agent
 
-
 def init_builder(state):
     try:
         builder_agent = init_builder_chatbot_agent()
@@ -62,13 +48,7 @@ def init_builder(state):
         print(f'Error:{e}, with detail: {error}')
     state['builder_agent'] = builder_agent
 
-def init_agent(state):
-    init_user(state)
-    init_builder(state)
-    return state
-
-def init_ui_config(state):
-    builder_cfg, model_cfg, tool_cfg, available_tool_list = parse_configuration()
+def init_ui_config(state, builder_cfg, model_cfg, tool_cfg):
     # available models
     models = list(model_cfg.keys())
     capabilities = [(tool_cfg[tool_key]["name"], tool_key)
@@ -76,6 +56,7 @@ def init_ui_config(state):
     state["tool_cfg"] = tool_cfg
     state["capabilities"] = capabilities
     return [
+        state,
         # config form
         builder_cfg.get('name', ''),
         builder_cfg.get('description'),
@@ -90,12 +71,30 @@ def init_ui_config(state):
         format_cover_html(builder_cfg)
     ]
 
+def init_all(state):
+    builder_cfg, model_cfg, tool_cfg, available_tool_list = parse_configuration()
+    ret = init_ui_config(state, builder_cfg, model_cfg, tool_cfg)
+    yield ret
+    init_user(state)
+    init_builder(state)
+    yield ret
 
 def reset_agent(state):
     user_agent = state['user_agent']
     user_agent.reset()
     state['user_agent'] = user_agent
 
+def format_cover_html(configuration):
+    print('configuration:', configuration)
+    return f"""
+<div class="bot_cover">
+    <div class="bot_avatar">
+        <img src="//img.alicdn.com/imgextra/i3/O1CN01YPqZFO1YNZerQfSBk_!!6000000003047-0-tps-225-225.jpg" />
+    </div>
+    <div class="bot_name">{configuration["name"]}</div>
+    <div class="bot_desp">{configuration["description"]}</div>
+</div>
+"""
 
 def format_preview_send_message_ret(preview_chatbot):
     return [
@@ -165,8 +164,7 @@ def process_configuration(name, description, instructions, model, starters,
 demo = gr.Blocks(css="assets/app.css")
 with demo:
     state = gr.State({})
-    demo.load(init_agent, inputs=[state], outputs=[state])
-
+   
     with gr.Row():
         with gr.Column():
             with gr.Tabs():
@@ -261,7 +259,8 @@ with demo:
         inputs=[user_chatbot, preview_chat_input, state],
         outputs=[user_chatbot, user_chat_bot_cover])
 
-    demo.load(init_ui_config, inputs=[state], outputs=[
+    demo.load(init_all, inputs=[state], outputs=[
+        state,
         # config form
         name_input,
         description_input,
@@ -273,7 +272,6 @@ with demo:
         # bot
         user_chat_bot_cover
     ])
-
 
 demo.queue()
 demo.launch()
