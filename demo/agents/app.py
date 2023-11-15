@@ -62,6 +62,10 @@ def init_builder(state):
         print(f'Error:{e}, with detail: {error}')
     state['builder_agent'] = builder_agent
 
+def init_agent(state):
+    init_user(state)
+    init_builder(state)
+    return state
 
 def init_ui_config(state):
     builder_cfg, model_cfg, tool_cfg, available_tool_list = parse_configuration()
@@ -158,10 +162,10 @@ def process_configuration(name, description, instructions, model, starters,
 
 
 # 创建 Gradio 界面
-with gr.Blocks(css="assets/app.css") as demo:
+demo = gr.Blocks(css="assets/app.css")
+with demo:
     state = gr.State({})
-    # demo.load(init_user, inputs=[state], outputs=[])
-    # demo.load(init_builder, inputs=[state], outputs=[])
+    demo.load(init_agent, inputs=[state], outputs=[state])
 
     with gr.Row():
         with gr.Column():
@@ -271,5 +275,5 @@ with gr.Blocks(css="assets/app.css") as demo:
     ])
 
 
-demo.queue(max_size=1)
+demo.queue()
 demo.launch()
