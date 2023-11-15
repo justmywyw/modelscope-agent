@@ -10,8 +10,7 @@ builder_cfg, model_cfg, tool_cfg, available_tool_list = parse_configuration()
 
 # available models
 models = list(model_cfg.keys())
-capabilities = [(tool_cfg[tool_key]["name"], tool_key)
-                for tool_key in tool_cfg.keys()]
+capabilities = [(tool_cfg[tool_key]["name"], tool_key) for tool_key in tool_cfg.keys() if tool_cfg[tool_key]["is_active"]]
 
 
 def format_cover_html(configuration):
@@ -69,6 +68,9 @@ def init_builder(state):
         print(f'Error:{e}, with detail: {error}')
     state['builder_agent'] = builder_agent
 
+def init_ui_config():
+    print('111')
+
 
 def reset_agent(state):
     user_agent = state['user_agent']
@@ -112,24 +114,15 @@ def preview_send_message(preview_chatbot, preview_chat_input, state):
 
 
 def process_configuration(name, description, instructions, model, starters,
-                          files, capabilities_checkboxes, state):
+                          files, capabilities_checkboxes):
+
     builder_cfg = {
-        "name":
-        name,
-        "avatar":
-        "",
-        "description":
-        description,
-        "instruction":
-        instructions,
-        "conversation_starters":
-        starters,
-        "suggests": [
-            "You can ask me to do something",
-            "how to write a code to generate a random number"
-        ],
-        "knowledge":
-        list(map(lambda file: file.name, files or [])),
+        "name": name,
+        "avatar": "",
+        "description": description,
+        "instruction": instructions,
+        "suggests": starters.split('\n'),
+        "knowledge": list(map(lambda file: file.name, files or [])),
         "tools": {
             capability: dict(
                 name=tool_cfg[capability]["name"],
@@ -150,8 +143,9 @@ def process_configuration(name, description, instructions, model, starters,
 # 创建 Gradio 界面
 with gr.Blocks(css="assets/app.css") as demo:
     state = gr.State({})
-    demo.load(init_user, inputs=[state], outputs=[])
-    demo.load(init_builder, inputs=[state], outputs=[])
+    # demo.load(init_user, inputs=[state], outputs=[])
+    # demo.load(init_builder, inputs=[state], outputs=[])
+    demo.load(init_ui_config, inputs=[], outputs=[])
 
     with gr.Row():
         with gr.Column():
@@ -188,8 +182,7 @@ with gr.Blocks(css="assets/app.css") as demo:
                             label="Conversation starters",
                             placeholder="Add conversation starters",
                             lines=3,
-                            value=builder_cfg.get("conversation_starters")
-                            or "")
+                            value="\n".join(builder_cfg.get("suggests",[])))
                         knowledge_input = gr.File(
                             label="Knowledge",
                             file_count="multiple",
@@ -199,7 +192,7 @@ with gr.Blocks(css="assets/app.css") as demo:
                         capabilities_checkboxes = gr.CheckboxGroup(
                             label="Capabilities",
                             choices=capabilities,
-                            value=[capabilities[0][1]])
+                            value=[tool for tool in list(builder_cfg.get("tools",{}).keys()) if builder_cfg.get("tools").get(tool).get("use",False)])
 
                         with gr.Accordion("配置选项", open=False):
                             schema1 = gr.Textbox(
