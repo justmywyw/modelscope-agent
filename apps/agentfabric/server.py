@@ -1,22 +1,30 @@
+import os
 import random
 
 import json
 from builder_core import beauty_output, init_builder_chatbot_agent
 from config_utils import Config, save_builder_configuration
 from flask import Flask, Response, request
+from server_utils import STATIC_FOLDER
 from user_core import init_user_chatbot_agent
 
-app = Flask(__name__, static_folder='statics', static_url_path='/static')
+app = Flask(__name__, static_folder=STATIC_FOLDER, static_url_path='/static')
 
 
 @app.route('/preview/save/<uuid_str>', methods=['POST'])
 def previewSave(uuid_str):
-    req_data = request.get_json()
-    builder_config = req_data.get('builder_config')
-    # model_config = req_data.get('model_config')
-    # tool_config = req_data.get('tool_config')
+    builder_config_str = request.form.get('builder_config')
+    builder_config = json.loads(builder_config_str)
+    files = request.files.getlist('files')
+    upload_dir = os.path.join('config', uuid_str, 'upload')
+    if not os.path.exists(upload_dir):
+        os.makedirs(upload_dir)
+    for file in files:
+        file.save(os.path.join(upload_dir, file.filename))
     save_builder_configuration(builder_cfg=builder_config, uuid_str=uuid_str)
-    return 'ok'
+    return json.dumps({
+        'success': True,
+    })
 
 
 @app.route('/preview/chat/<uuid_str>', methods=['POST'])
@@ -80,10 +88,13 @@ def createChat(uuid_str):
                 if isinstance(exec_result, dict):
                     exec_result = exec_result['result']
                     assert isinstance(exec_result, Config)
+                    builder_cfg = exec_result.to_dict()
+                    save_builder_configuration(builder_cfg, uuid_str)
                     res = json.dumps({
                         'data': '',
-                        'config': exec_result.to_dict(),
+                        'config': builder_cfg,
                     })
+                    print('res:', res)
                     yield f'data: {res}\n\n'
             else:
                 # llm result
@@ -100,6 +111,7 @@ def createChat(uuid_str):
                     'data': response,
                     'is_final': is_final,
                 })
+                print('res:', res)
                 yield f'data: {res}\n\n'
 
     return Response(generate(), mimetype='text/event-stream')
