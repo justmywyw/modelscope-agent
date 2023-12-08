@@ -7,5 +7,5 @@ COPY . /home/workspace
 
 RUN pip install -r /home/workspace/requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 
-WORKDIR /home/workspace/
+WORKDIR /home/workspace/apps/agentfabric
 ENTRYPOINT ["python", "/home/workspace/apps/agentfabric/server.py"]
