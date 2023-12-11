@@ -3,12 +3,29 @@ import random
 
 import json
 from builder_core import beauty_output, init_builder_chatbot_agent
-from config_utils import Config, save_builder_configuration
-from flask import Flask, Response, request
+from config_utils import (Config, get_ci_dir, parse_configuration,
+                          save_builder_configuration)
+from flask import Flask, Response, jsonify, request
+from publish_util import pop_user_info_from_config, prepare_agent_zip
 from server_utils import STATIC_FOLDER
 from user_core import init_user_chatbot_agent
 
 app = Flask(__name__, static_folder=STATIC_FOLDER, static_url_path='/static')
+
+
+@app.route('/preview/config/<uuid_str>')
+def previewConfig(uuid_str):
+    builder_cfg, model_cfg, tool_cfg, available_tool_list, _, _ = parse_configuration(
+        uuid_str)
+    return jsonify({
+        'success': True,
+        'data': {
+            'builder_config': builder_cfg.to_dict(),
+            'model_config': model_cfg.to_dict(),
+            'tool_config': tool_cfg.to_dict(),
+            'available_tool_list': available_tool_list,
+        }
+    })
 
 
 @app.route('/preview/save/<uuid_str>', methods=['POST'])
@@ -22,15 +39,33 @@ def previewSave(uuid_str):
     for file in files:
         file.save(os.path.join(upload_dir, file.filename))
     save_builder_configuration(builder_cfg=builder_config, uuid_str=uuid_str)
-    return json.dumps({
+    return jsonify({
         'success': True,
     })
 
 
+@app.route('/preview/publish/zip/<uuid_str>', methods=['POST'])
+def previewPublishGetZip(uuid_str):
+    req_data = request.get_json()
+    name = req_data.get('name')
+    src_dir = os.path.abspath(os.path.dirname(__file__))
+    user_info = pop_user_info_from_config(src_dir, uuid_str)
+    print('user_info:', user_info)
+    output_url = prepare_agent_zip(name, src_dir, uuid_str, None)
+    return jsonify({'success': True, 'data': {'output_url': output_url}})
+
+
 @app.route('/preview/chat/<uuid_str>', methods=['POST'])
 def previewChat(uuid_str):
-    req_data = request.get_json()
-    input_param = req_data.get('content')
+    params_str = request.form.get('params')
+    params = json.loads(params_str)
+    input_param = params.get('content')
+    files = request.files.getlist('files')
+    file_paths = []
+    for file in files:
+        file_path = os.path.join(get_ci_dir(), file.filename)
+        file.save(file_path)
+        file_paths.append(file_path)
 
     def generate():
         seed = random.randint(0, 1000000000)
@@ -41,7 +76,10 @@ def previewChat(uuid_str):
         response = ''
         is_final = False
         for frame in user_agent.stream_run(
-                input_param, print_info=True, remote=False):
+                input_param,
+                print_info=True,
+                remote=False,
+                append_files=file_paths):
             print('frame:', frame)
             llm_result = frame.get('llm_text', '')
             exec_result = frame.get('exec_result', '')
@@ -58,7 +96,7 @@ def previewChat(uuid_str):
 
             # important! do not change this
             response += frame_text
-            res = json.dumps({
+            res = jsonify({
                 'data': response,
                 'is_final': is_final,
             })
@@ -69,8 +107,15 @@ def previewChat(uuid_str):
 
 @app.route('/create/chat/<uuid_str>', methods=['POST'])
 def createChat(uuid_str):
-    req_data = request.get_json()
-    input_param = req_data.get('content')
+    data_str = request.form.get('data')
+    data = json.loads(data_str)
+    input_param = data.get('content')
+    files = request.files.getlist('files')
+    file_paths = []
+    for file in files:
+        file_path = os.path.join(get_ci_dir(), file.filename)
+        file.save(file_path)
+        file_paths.append(file_path)
 
     def generate():
         builder_agent = init_builder_chatbot_agent(uuid_str)
@@ -90,7 +135,7 @@ def createChat(uuid_str):
                     assert isinstance(exec_result, Config)
                     builder_cfg = exec_result.to_dict()
                     save_builder_configuration(builder_cfg, uuid_str)
-                    res = json.dumps({
+                    res = jsonify({
                         'data': '',
                         'config': builder_cfg,
                     })
@@ -107,7 +152,7 @@ def createChat(uuid_str):
                 frame_text = content
                 response = beauty_output(f'{response}{frame_text}',
                                          step_result)
-                res = json.dumps({
+                res = jsonify({
                     'data': response,
                     'is_final': is_final,
                 })
@@ -115,6 +160,13 @@ def createChat(uuid_str):
                 yield f'data: {res}\n\n'
 
     return Response(generate(), mimetype='text/event-stream')
+
+
+@app.errorhandler(Exception)
+def handle_error(error):
+    # 处理错误并返回统一格式的错误信息
+    error_message = {'message': str(error), 'status': 500}
+    return jsonify(error_message), 500
 
 
 if __name__ == '__main__':
