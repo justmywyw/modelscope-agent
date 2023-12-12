@@ -41,7 +41,11 @@ def previewGetFile(uuid_str, file_name):
                 directory, file_name, as_attachment=as_attachment))
         return response
     except Exception as e:
-        return jsonify({'success': False, 'status': 500, 'message': str(e)})
+        return jsonify({
+            'success': False,
+            'status': 404,
+            'message': str(e)
+        }), 404
 
 
 @app.route('/preview/save/<uuid_str>', methods=['POST'])
@@ -49,7 +53,7 @@ def previewSave(uuid_str):
     builder_config_str = request.form.get('builder_config')
     builder_config = json.loads(builder_config_str)
     files = request.files.getlist('files')
-    upload_dir = os.path.join('config', uuid_str, 'upload')
+    upload_dir = get_user_dir(uuid_str)
     if not os.path.exists(upload_dir):
         os.makedirs(upload_dir)
     for file in files:
