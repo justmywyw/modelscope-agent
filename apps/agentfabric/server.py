@@ -3,9 +3,10 @@ import random
 
 import json
 from builder_core import beauty_output, init_builder_chatbot_agent
-from config_utils import (Config, get_ci_dir, parse_configuration,
-                          save_builder_configuration)
-from flask import Flask, Response, request
+from config_utils import (Config, get_ci_dir, get_user_dir,
+                          parse_configuration, save_builder_configuration)
+from flask import (Flask, Response, jsonify, make_response, request,
+                   send_from_directory)
 from publish_util import pop_user_info_from_config, prepare_agent_zip
 from server_utils import STATIC_FOLDER
 from user_core import init_user_chatbot_agent
@@ -26,6 +27,21 @@ def previewConfig(uuid_str):
             'available_tool_list': available_tool_list,
         }
     })
+
+
+# TODO: 用户文件鉴权
+@app.route('/preview/config_files/<uuid_str>/<file_name>', methods=['GET'])
+def previewGetFile(uuid_str, file_name):
+    print('uuid_str:', uuid_str, 'file_name:', file_name)
+    as_attachment = request.args.get('as_attachment') == 'true'
+    directory = get_user_dir(uuid_str)
+    try:
+        response = make_response(
+            send_from_directory(
+                directory, file_name, as_attachment=as_attachment))
+        return response
+    except Exception as e:
+        return jsonify({'success': False, 'status': 500, 'message': str(e)})
 
 
 @app.route('/preview/save/<uuid_str>', methods=['POST'])
@@ -165,7 +181,7 @@ def createChat(uuid_str):
 @app.errorhandler(Exception)
 def handle_error(error):
     # 处理错误并返回统一格式的错误信息
-    error_message = {'message': str(error), 'status': 500}
+    error_message = {'success': False, 'message': str(error), 'status': 500}
     return jsonify(error_message), 500
 
 
