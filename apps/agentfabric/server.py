@@ -5,7 +5,7 @@ import json
 from builder_core import beauty_output, init_builder_chatbot_agent
 from config_utils import (Config, get_ci_dir, parse_configuration,
                           save_builder_configuration)
-from flask import Flask, Response, jsonify, request
+from flask import Flask, Response, request
 from publish_util import pop_user_info_from_config, prepare_agent_zip
 from server_utils import STATIC_FOLDER
 from user_core import init_user_chatbot_agent
@@ -96,7 +96,7 @@ def previewChat(uuid_str):
 
             # important! do not change this
             response += frame_text
-            res = jsonify({
+            res = json.dumps({
                 'data': response,
                 'is_final': is_final,
             })
@@ -152,7 +152,7 @@ def createChat(uuid_str):
                 frame_text = content
                 response = beauty_output(f'{response}{frame_text}',
                                          step_result)
-                res = jsonify({
+                res = json.dumps({
                     'data': response,
                     'is_final': is_final,
                 })
