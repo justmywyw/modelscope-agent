@@ -160,7 +160,9 @@ def createChat(uuid_str):
                     builder_cfg = exec_result.to_dict()
                     save_builder_configuration(builder_cfg, uuid_str)
                     res = json.dumps({
+                        'data': response,
                         'config': builder_cfg,
+                        'is_final': is_final,
                     })
                     print('res:', res)
                     yield f'data: {res}\n\n'
@@ -181,6 +183,12 @@ def createChat(uuid_str):
                 })
                 print('res:', res)
                 yield f'data: {res}\n\n'
+
+        final_res = json.dumps({
+            'data': response,
+            'is_final': True,
+        })
+        yield f'data: {final_res}\n\n'
 
     return Response(generate(), mimetype='text/event-stream')
 
