@@ -13,6 +13,10 @@ from user_core import init_user_chatbot_agent
 
 app = Flask(__name__, static_folder=STATIC_FOLDER, static_url_path='/static')
 
+ci_dir = get_ci_dir()
+if not os.path.exists(ci_dir):
+    os.makedirs(ci_dir)
+
 
 @app.route('/preview/config/<uuid_str>')
 def previewConfig(uuid_str):
@@ -127,9 +131,9 @@ def previewChat(uuid_str):
 
 @app.route('/create/chat/<uuid_str>', methods=['POST'])
 def createChat(uuid_str):
-    data_str = request.form.get('data')
-    data = json.loads(data_str)
-    input_param = data.get('content')
+    params_str = request.form.get('params')
+    params = json.loads(params_str)
+    input_param = params.get('content')
     files = request.files.getlist('files')
     file_paths = []
     for file in files:
@@ -155,8 +159,7 @@ def createChat(uuid_str):
                     assert isinstance(exec_result, Config)
                     builder_cfg = exec_result.to_dict()
                     save_builder_configuration(builder_cfg, uuid_str)
-                    res = jsonify({
-                        'data': '',
+                    res = json.dumps({
                         'config': builder_cfg,
                     })
                     print('res:', res)
