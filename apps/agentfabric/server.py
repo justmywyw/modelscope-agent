@@ -2,22 +2,24 @@ import os
 import random
 
 import json
-from builder_core import beauty_output, init_builder_chatbot_agent
+from builder_core import beauty_output
 from config_utils import (Config, get_ci_dir, get_user_dir,
                           parse_configuration, save_builder_configuration)
 from flask import (Flask, Response, jsonify, make_response, request,
                    send_from_directory)
 from publish_util import pop_user_info_from_config, prepare_agent_zip
-from server_utils import STATIC_FOLDER
-from user_core import init_user_chatbot_agent
+from server_utils import STATIC_FOLDER, SessionManager
 
 app = Flask(__name__, static_folder=STATIC_FOLDER, static_url_path='/static')
+
+app.session_manager = SessionManager()
 
 ci_dir = get_ci_dir()
 if not os.path.exists(ci_dir):
     os.makedirs(ci_dir)
 
 
+# 获取用户当前 config
 @app.route('/preview/config/<uuid_str>')
 def previewConfig(uuid_str):
     builder_cfg, model_cfg, tool_cfg, available_tool_list, _, _ = parse_configuration(
@@ -33,6 +35,7 @@ def previewConfig(uuid_str):
     })
 
 
+# 获取用户当前额外文件，例如头像、上传的其他知识库等
 # TODO: 用户文件鉴权
 @app.route('/preview/config_files/<uuid_str>/<file_name>', methods=['GET'])
 def previewGetFile(uuid_str, file_name):
@@ -52,6 +55,7 @@ def previewGetFile(uuid_str, file_name):
         }), 404
 
 
+# 保存用户当前配置
 @app.route('/preview/save/<uuid_str>', methods=['POST'])
 def previewSave(uuid_str):
     builder_config_str = request.form.get('builder_config')
@@ -63,11 +67,14 @@ def previewSave(uuid_str):
     for file in files:
         file.save(os.path.join(upload_dir, file.filename))
     save_builder_configuration(builder_cfg=builder_config, uuid_str=uuid_str)
+    app.session_manager.clear_user_bot(uuid_str)
+
     return jsonify({
         'success': True,
     })
 
 
+# 获取用户发布包
 @app.route('/preview/publish/zip/<uuid_str>', methods=['POST'])
 def previewPublishGetZip(uuid_str):
     req_data = request.get_json()
@@ -79,6 +86,7 @@ def previewPublishGetZip(uuid_str):
     return jsonify({'success': True, 'data': {'output_url': output_url}})
 
 
+# 预览对话接口
 @app.route('/preview/chat/<uuid_str>', methods=['POST'])
 def previewChat(uuid_str):
     params_str = request.form.get('params')
@@ -93,7 +101,7 @@ def previewChat(uuid_str):
 
     def generate():
         seed = random.randint(0, 1000000000)
-        user_agent = init_user_chatbot_agent(uuid_str)
+        user_agent = app.session_manager.get_user_bot(uuid_str)
         user_agent.seed = seed
 
         print('input_param:', input_param)
@@ -129,6 +137,14 @@ def previewChat(uuid_str):
     return Response(generate(), mimetype='text/event-stream')
 
 
+# 清除当前预览对话实例
+@app.route('/preview/chat/<uuid_str>', methods=['DELETE'])
+def deletePreviewChat(uuid_str):
+    app.session_manager.clear_user_bot(uuid_str)
+    return jsonify({'success': True})
+
+
+# 创建对话接口
 @app.route('/create/chat/<uuid_str>', methods=['POST'])
 def createChat(uuid_str):
     params_str = request.form.get('params')
@@ -142,7 +158,7 @@ def createChat(uuid_str):
         file_paths.append(file_path)
 
     def generate():
-        builder_agent = init_builder_chatbot_agent(uuid_str)
+        builder_agent = app.session_manager.get_builder_bot(uuid_str)
 
         print('input_param:', input_param)
         response = ''
@@ -159,6 +175,7 @@ def createChat(uuid_str):
                     assert isinstance(exec_result, Config)
                     builder_cfg = exec_result.to_dict()
                     save_builder_configuration(builder_cfg, uuid_str)
+                    app.session_manager.clear_user_bot(uuid_str)
                     res = json.dumps({
                         'data': response,
                         'config': builder_cfg,
@@ -191,6 +208,13 @@ def createChat(uuid_str):
         yield f'data: {final_res}\n\n'
 
     return Response(generate(), mimetype='text/event-stream')
+
+
+# 清除当前创建对话实例
+@app.route('/create/chat/<uuid_str>', methods=['DELETE'])
+def deleteCreateChat(uuid_str):
+    app.session_manager.clear_builder_bot(uuid_str)
+    return jsonify({'success': True})
 
 
 @app.errorhandler(Exception)
