@@ -85,5 +85,10 @@
       "use": false,
       "is_active": false,
       "is_remote_tool": true
+  },
+  "ui_form_generator": {
+      "name": "UI表单生成",
+      "is_active": true,
+      "use": true
   }
 }
