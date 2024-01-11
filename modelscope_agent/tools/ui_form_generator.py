@@ -1,5 +1,7 @@
+import re
 from http import HTTPStatus
 
+import json
 from dashscope import Generation
 from modelscope_agent.tools.tool import Tool, ToolSchema
 from pydantic import ValidationError
@@ -197,14 +199,13 @@ class UiFormGenerator(Tool):
             all_param)
 
     def __call__(self, *args, **kwargs):
-        input = kwargs['input']
+        input = kwargs['input'] if 'input' in kwargs else str(kwargs)
         system_prompt = f"""
 为我将用户输入翻译成以下的 JSON 对象，根据以下的 TypeScript 声明:
 ```
 {form_typescript}
 ```
-
-输出的内容不需要用代码块包裹，中间为完整的 json 对象内容，不需要输出其他任何内容
+只要输出完整的 json 对象内容，不需要输出其他任何内容。
 """
         response = Generation.call(
             model='qwen-max',
@@ -220,7 +221,17 @@ class UiFormGenerator(Tool):
             repetition_penalty=1.0)
         if response.status_code == HTTPStatus.OK:
             ret = response.output.choices[0].message.content
-            return ret
+            return {'result': self._process_output(ret)}
+
+    def _process_output(self, str):
+        print('str:', str)
+        json_str = re.sub(r'^(```json\s*|```\s*)|(```.*\s*)$', '', str)
+        data = json.loads(json_str)
+        form_items = data['formItems']
+        print('form_items:', form_items)
+        return f"""
+   <custom-form form-items='{json.dumps(form_items)}'></custom-form>
+"""
 
 
 if __name__ == '__main__':

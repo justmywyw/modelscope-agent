@@ -49,7 +49,10 @@ def init_user(state):
 
 
 # 创建 Gradio 界面
-demo = gr.Blocks(css='assets/appBot.css', theme=customTheme)
+demo = gr.Blocks(
+    css='assets/appBot.css',
+    theme=customTheme,
+    js=os.path.join(os.path.dirname(__file__), 'assets/render_form.js'))
 with demo:
     gr.Markdown(
         '# <center> \N{fire} AgentFabric powered by Modelscope-agent ([github star](https://github.com/modelscope/modelscope-agent/tree/main))</center>'  # noqa E501
@@ -61,7 +64,8 @@ with demo:
             with gr.Column():
                 # Preview
                 user_chatbot = mgr.Chatbot(
-                    value=[[None, '尝试问我一点什么吧～']],
+                    value=[[None, """可以问我一些什么吧～"""]],
+                    sanitize_html=False,
                     elem_id='user_chatbot',
                     elem_classes=['markdown-body'],
                     avatar_images=avatar_pairs,
@@ -69,6 +73,7 @@ with demo:
                     latex_delimiters=[],
                     show_label=False,
                     show_copy_button=True,
+                    flushing_speed=10,
                     llm_thinking_presets=[
                         qwen(
                             action_input_title='调用 <Action>',
@@ -76,6 +81,7 @@ with demo:
                     ])
             with gr.Row():
                 user_chatbot_input = mgr.MultimodalInput(
+                    elem_id='user_chatbot_input',
                     interactive=True,
                     placeholder='跟我聊聊吧～',
                     upload_button_props=dict(
